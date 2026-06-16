@@ -9,138 +9,118 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: debian:9
 
     steps:
-      - name: Fix Debian 9 archive sources
+      - name: Build FFmpeg in Debian 9 container
         run: |
-          # Debian 9 (stretch) 已 EOL，官方源下线，改用归档源
-          echo "deb http://archive.debian.org/debian stretch main contrib non-free" > /etc/apt/sources.list
-          echo "deb http://archive.debian.org/debian-security stretch/updates main contrib non-free" >> /etc/apt/sources.list
-          # 跳过 Release 文件过期校验
-          echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until
+          docker run --rm -v /tmp/output:/output debian:9 bash -c '
+            set -e
 
-      - name: Install build dependencies
+            # 修复 Debian 9 归档源
+            echo "deb http://archive.debian.org/debian stretch main contrib non-free" > /etc/apt/sources.list
+            echo "deb http://archive.debian.org/debian-security stretch/updates main contrib non-free" >> /etc/apt/sources.list
+            echo "Acquire::Check-Valid-Until \"false\";" > /etc/apt/apt.conf.d/99no-check-valid-until
+
+            apt-get update -q
+            apt-get install -y \
+              wget xz-utils build-essential git cmake \
+              yasm pkg-config \
+              libvpx-dev libopus-dev \
+              libmp3lame-dev libfdk-aac-dev \
+              zlib1g-dev libnuma-dev
+
+            # nasm
+            cd /tmp
+            wget -q https://www.nasm.us/pub/nasm/releasebuilds/2.16.01/nasm-2.16.01.tar.xz
+            tar -xf nasm-2.16.01.tar.xz
+            cd nasm-2.16.01
+            ./configure --prefix=/usr/local -q
+            make -j$(nproc)
+            make install
+            echo "nasm: $(nasm --version)"
+
+            # x264
+            cd /tmp
+            git clone -q --depth 1 https://code.videolan.org/videolan/x264.git
+            cd x264
+            ./configure --prefix=/tmp/deps --enable-static --disable-opencl
+            make -j$(nproc)
+            make install
+
+            # x265
+            cd /tmp
+            git clone -q --depth 1 https://bitbucket.org/multicoreware/x265_git.git x265
+            mkdir -p x265/build/linux && cd x265/build/linux
+            cmake \
+              -DCMAKE_INSTALL_PREFIX=/tmp/deps \
+              -DCMAKE_INSTALL_LIBDIR=lib \
+              -DENABLE_SHARED=OFF \
+              -DENABLE_CLI=OFF \
+              ../../source
+            make -j$(nproc)
+            make install
+            mkdir -p /tmp/deps/lib/pkgconfig
+            printf "prefix=/tmp/deps\nexec_prefix=\${prefix}\nlibdir=\${exec_prefix}/lib\nincludedir=\${prefix}/include\n\nName: x265\nDescription: H.265/HEVC video encoder\nVersion: 3.5\nLibs: -L\${libdir} -lx265 -lstdc++ -lm -lnuma -ldl -lpthread -lrt\nCflags: -I\${includedir}\n" > /tmp/deps/lib/pkgconfig/x265.pc
+
+            # OpenSSL
+            cd /tmp
+            wget -q https://www.openssl.org/source/openssl-1.1.1w.tar.gz
+            tar -xf openssl-1.1.1w.tar.gz
+            cd openssl-1.1.1w
+            ./config --prefix=/tmp/deps --openssldir=/tmp/deps/ssl no-shared no-tests
+            make -j$(nproc)
+            make install_sw
+
+            # FFmpeg
+            cd /tmp
+            wget -q https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz
+            tar -xf ffmpeg-8.1.tar.xz
+            cd ffmpeg-8.1
+            export PKG_CONFIG_PATH=/tmp/deps/lib/pkgconfig
+            ./configure \
+              --prefix=/tmp/ffmpeg-output \
+              --enable-static \
+              --disable-shared \
+              --enable-gpl \
+              --enable-nonfree \
+              --enable-libx264 \
+              --enable-libx265 \
+              --enable-libvpx \
+              --enable-libopus \
+              --enable-libmp3lame \
+              --enable-libfdk-aac \
+              --enable-openssl \
+              --disable-debug \
+              --disable-doc \
+              --disable-ffplay \
+              --extra-cflags="-I/tmp/deps/include" \
+              --extra-ldflags="-L/tmp/deps/lib" \
+              --extra-libs="-lstdc++ -lpthread -lnuma -ldl"
+            make -j$(nproc)
+            make install
+
+            # 打包
+            mkdir -p /output/bin
+            cp /tmp/ffmpeg-output/bin/ffmpeg /output/bin/
+            cp /tmp/ffmpeg-output/bin/ffprobe /output/bin/
+            strip /output/bin/ffmpeg /output/bin/ffprobe
+            echo "=== 版本 ==="
+            /output/bin/ffmpeg -version
+            echo "=== 文件大小 ==="
+            ls -lh /output/bin/
+          '
+
+      - name: Package as ZIP
         run: |
-          apt-get update
-          apt-get install -y \
-            wget xz-utils build-essential git cmake \
-            yasm pkg-config \
-            libvpx-dev libopus-dev \
-            libmp3lame-dev libfdk-aac-dev \
-            zlib1g-dev
-
-      - name: Build nasm from source
-        run: |
-          cd /tmp
-          wget https://www.nasm.us/pub/nasm/releasebuilds/2.16.01/nasm-2.16.01.tar.xz
-          tar -xf nasm-2.16.01.tar.xz
-          cd nasm-2.16.01
-          ./configure --prefix=/usr/local
-          make -j$(nproc)
-          make install
-          nasm --version
-
-      - name: Build x264 from source
-        run: |
-          cd /tmp
-          git clone --depth 1 https://code.videolan.org/videolan/x264.git
-          cd x264
-          ./configure \
-            --prefix=/tmp/deps \
-            --enable-static \
-            --disable-opencl
-          make -j$(nproc)
-          make install
-
-      - name: Build x265 from source
-        run: |
-          apt-get install -y libnuma-dev
-          cd /tmp
-          git clone --depth 1 https://bitbucket.org/multicoreware/x265_git.git x265
-          mkdir -p x265/build/linux && cd x265/build/linux
-          cmake \
-            -DCMAKE_INSTALL_PREFIX=/tmp/deps \
-            -DCMAKE_INSTALL_LIBDIR=lib \
-            -DENABLE_SHARED=OFF \
-            -DENABLE_CLI=OFF \
-            ../../source
-          make -j$(nproc)
-          make install
-          # 手动生成 x265.pc（旧版 cmake 不自动生成）
-          mkdir -p /tmp/deps/lib/pkgconfig
-          printf 'prefix=/tmp/deps\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: x265\nDescription: H.265/HEVC video encoder\nVersion: 3.5\nLibs: -L${libdir} -lx265 -lstdc++ -lm -lnuma -ldl -lpthread -lrt\nCflags: -I${includedir}\n' > /tmp/deps/lib/pkgconfig/x265.pc
-
-      - name: Build OpenSSL from source
-        run: |
-          cd /tmp
-          wget https://www.openssl.org/source/openssl-1.1.1w.tar.gz
-          tar -xf openssl-1.1.1w.tar.gz
-          cd openssl-1.1.1w
-          ./config \
-            --prefix=/tmp/deps \
-            --openssldir=/tmp/deps/ssl \
-            no-shared \
-            no-tests
-          make -j$(nproc)
-          make install_sw
-
-      - name: Download FFmpeg 8.1 source
-        run: |
-          cd /tmp
-          wget https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz
-          tar -xf ffmpeg-8.1.tar.xz
-
-      - name: Configure FFmpeg
-        run: |
-          export PKG_CONFIG_PATH=/tmp/deps/lib/pkgconfig
-          cd /tmp/ffmpeg-8.1
-          ./configure \
-            --prefix=/tmp/ffmpeg-output \
-            --enable-static \
-            --disable-shared \
-            --enable-gpl \
-            --enable-nonfree \
-            --enable-libx264 \
-            --enable-libx265 \
-            --enable-libvpx \
-            --enable-libopus \
-            --enable-libmp3lame \
-            --enable-libfdk-aac \
-            --enable-openssl \
-            --disable-debug \
-            --disable-doc \
-            --disable-ffplay \
-            --extra-cflags="-I/tmp/deps/include" \
-            --extra-ldflags="-L/tmp/deps/lib" \
-            --extra-libs="-lstdc++ -lpthread -lnuma -ldl"
-
-      - name: Compile FFmpeg
-        run: |
-          cd /tmp/ffmpeg-8.1
-          make -j$(nproc)
-          make install
-
-      - name: Package layer
-        run: |
-          mkdir -p /tmp/layer/bin
-          cp /tmp/ffmpeg-output/bin/ffmpeg /tmp/layer/bin/
-          cp /tmp/ffmpeg-output/bin/ffprobe /tmp/layer/bin/
-          strip /tmp/layer/bin/ffmpeg /tmp/layer/bin/ffprobe
-
+          mkdir -p /tmp/layer
+          cp -r /tmp/output/bin /tmp/layer/
           cd /tmp/layer
-          tar -czf /tmp/ffmpeg-layer.tar.gz bin/
-
-          # 显示版本信息
-          /tmp/layer/bin/ffmpeg -version
-
-          # 显示文件大小
-          ls -lh /tmp/ffmpeg-layer.tar.gz
+          zip -r /tmp/ffmpeg-layer.zip bin/
+          ls -lh /tmp/ffmpeg-layer.zip
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ffmpeg-8.1-layer
-          path: /tmp/ffmpeg-layer.tar.gz
+          path: /tmp/ffmpeg-layer.zip
           retention-days: 30

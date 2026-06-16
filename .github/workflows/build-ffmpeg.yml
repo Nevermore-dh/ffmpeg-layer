@@ -100,7 +100,11 @@ jobs:
             --disable-ffplay \
             --extra-cflags="-I/tmp/deps/include" \
             --extra-ldflags="-L/tmp/deps/lib" \
-            --extra-libs="-lstdc++ -lnuma -ldl"
+            --extra-libs="-lstdc++ -lnuma -ldl" || {
+              echo "=== config.log x265 相关内容 ==="
+              grep -A 20 "x265" /tmp/ffmpeg-8.1/ffbuild/config.log | tail -60
+              exit 1
+            }
 
       - name: Compile FFmpeg
         run: |

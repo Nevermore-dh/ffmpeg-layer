@@ -29,7 +29,7 @@ jobs:
             yasm pkg-config \
             libvpx-dev libopus-dev \
             libmp3lame-dev libfdk-aac-dev \
-            zlib1g-dev libssl-dev
+            zlib1g-dev
 
       - name: Build nasm from source
         run: |
@@ -72,6 +72,20 @@ jobs:
           mkdir -p /tmp/deps/lib/pkgconfig
           printf 'prefix=/tmp/deps\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: x265\nDescription: H.265/HEVC video encoder\nVersion: 3.5\nLibs: -L${libdir} -lx265 -lstdc++ -lm -lnuma -ldl -lpthread -lrt\nCflags: -I${includedir}\n' > /tmp/deps/lib/pkgconfig/x265.pc
 
+      - name: Build OpenSSL from source
+        run: |
+          cd /tmp
+          wget https://www.openssl.org/source/openssl-1.1.1w.tar.gz
+          tar -xf openssl-1.1.1w.tar.gz
+          cd openssl-1.1.1w
+          ./config \
+            --prefix=/tmp/deps \
+            --openssldir=/tmp/deps/ssl \
+            no-shared \
+            no-tests
+          make -j$(nproc)
+          make install_sw
+
       - name: Download FFmpeg 8.1 source
         run: |
           cd /tmp
@@ -100,11 +114,7 @@ jobs:
             --disable-ffplay \
             --extra-cflags="-I/tmp/deps/include" \
             --extra-ldflags="-L/tmp/deps/lib" \
-            --extra-libs="-lstdc++ -lnuma -ldl" || {
-              echo "=== config.log x265 相关内容 ==="
-              grep -A 20 "x265" /tmp/ffmpeg-8.1/ffbuild/config.log | tail -60
-              exit 1
-            }
+            --extra-libs="-lstdc++ -lnuma -ldl"
 
       - name: Compile FFmpeg
         run: |

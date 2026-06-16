@@ -13,6 +13,14 @@ jobs:
       image: debian:9
 
     steps:
+      - name: Fix Debian 9 archive sources
+        run: |
+          # Debian 9 (stretch) 已 EOL，官方源下线，改用归档源
+          echo "deb http://archive.debian.org/debian stretch main contrib non-free" > /etc/apt/sources.list
+          echo "deb http://archive.debian.org/debian-security stretch/updates main contrib non-free" >> /etc/apt/sources.list
+          # 跳过 Release 文件过期校验
+          echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until
+    
       - name: Install build dependencies
         run: |
           apt-get update

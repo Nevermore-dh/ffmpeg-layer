@@ -114,7 +114,13 @@ jobs:
             --disable-ffplay \
             --extra-cflags="-I/tmp/deps/include" \
             --extra-ldflags="-L/tmp/deps/lib" \
-            --extra-libs="-lstdc++ -lnuma -ldl"
+            --extra-libs="-lstdc++ -lnuma -ldl" || {
+              echo "=== openssl pkg-config ==="
+              PKG_CONFIG_PATH=/tmp/deps/lib/pkgconfig pkg-config --libs --cflags openssl || true
+              echo "=== config.log openssl 相关内容 ==="
+              grep -A 30 "check_pkg_config openssl\|check_lib openssl\|DTLS_get_data_mtu" /tmp/ffmpeg-8.1/ffbuild/config.log | tail -80
+              exit 1
+            }
 
       - name: Compile FFmpeg
         run: |

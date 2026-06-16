@@ -56,16 +56,20 @@ jobs:
 
       - name: Build x265 from source
         run: |
+          apt-get install -y libnuma-dev
           cd /tmp
           git clone --depth 1 https://bitbucket.org/multicoreware/x265_git.git x265
-          cd x265/build/linux
+          mkdir -p x265/build/linux && cd x265/build/linux
           cmake \
             -DCMAKE_INSTALL_PREFIX=/tmp/deps \
+            -DCMAKE_INSTALL_LIBDIR=lib \
             -DENABLE_SHARED=OFF \
             -DENABLE_CLI=OFF \
             ../../source
           make -j$(nproc)
           make install
+          # 验证 pkg-config 文件存在
+          ls /tmp/deps/lib/pkgconfig/x265.pc
 
       - name: Download FFmpeg 8.1 source
         run: |
@@ -94,7 +98,7 @@ jobs:
             --disable-doc \
             --disable-ffplay \
             --extra-cflags="-I/tmp/deps/include" \
-            --extra-ldflags="-L/tmp/deps/lib"
+            --extra-ldflags="-L/tmp/deps/lib -lstdc++ -lnuma"
 
       - name: Compile FFmpeg
         run: |

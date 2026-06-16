@@ -20,17 +20,42 @@ jobs:
           echo "deb http://archive.debian.org/debian-security stretch/updates main contrib non-free" >> /etc/apt/sources.list
           # 跳过 Release 文件过期校验
           echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until
-    
+
       - name: Install build dependencies
         run: |
           apt-get update
           apt-get install -y \
-            wget xz-utils build-essential \
+            wget xz-utils build-essential git cmake \
             nasm yasm pkg-config \
-            libx264-dev libx265-dev \
             libvpx-dev libopus-dev \
             libmp3lame-dev libfdk-aac-dev \
             zlib1g-dev libssl-dev
+
+      - name: Build x264 from source
+        run: |
+          cd /tmp
+          git clone --depth 1 https://code.videolan.org/videolan/x264.git
+          cd x264
+          ./configure \
+            --prefix=/tmp/deps \
+            --enable-static \
+            --disable-shared \
+            --disable-opencl
+          make -j$(nproc)
+          make install
+
+      - name: Build x265 from source
+        run: |
+          cd /tmp
+          git clone --depth 1 https://bitbucket.org/multicoreware/x265_git.git x265
+          cd x265/build/linux
+          cmake \
+            -DCMAKE_INSTALL_PREFIX=/tmp/deps \
+            -DENABLE_SHARED=OFF \
+            -DENABLE_CLI=OFF \
+            ../../source
+          make -j$(nproc)
+          make install
 
       - name: Download FFmpeg 8.1 source
         run: |
@@ -41,6 +66,7 @@ jobs:
       - name: Configure FFmpeg
         run: |
           cd /tmp/ffmpeg-8.1
+          PKG_CONFIG_PATH=/tmp/deps/lib/pkgconfig \
           ./configure \
             --prefix=/tmp/ffmpeg-output \
             --enable-static \
@@ -56,7 +82,9 @@ jobs:
             --enable-openssl \
             --disable-debug \
             --disable-doc \
-            --disable-ffplay
+            --disable-ffplay \
+            --extra-cflags="-I/tmp/deps/include" \
+            --extra-ldflags="-L/tmp/deps/lib"
 
       - name: Compile FFmpeg
         run: |

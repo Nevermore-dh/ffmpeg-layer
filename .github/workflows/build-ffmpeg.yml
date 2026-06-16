@@ -78,21 +78,10 @@ jobs:
           wget https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz
           tar -xf ffmpeg-8.1.tar.xz
 
-      - name: Debug pkg-config
-        run: |
-          echo "=== x265.pc 内容 ==="
-          cat /tmp/deps/lib/pkgconfig/x265.pc
-          echo "=== pkgconfig 目录 ==="
-          ls -la /tmp/deps/lib/pkgconfig/
-          echo "=== deps/lib 目录 ==="
-          ls -la /tmp/deps/lib/
-          echo "=== pkg-config 查询结果 ==="
-          PKG_CONFIG_PATH=/tmp/deps/lib/pkgconfig pkg-config --libs --cflags x265 || echo "pkg-config x265 FAILED"
-
       - name: Configure FFmpeg
         run: |
+          export PKG_CONFIG_PATH=/tmp/deps/lib/pkgconfig
           cd /tmp/ffmpeg-8.1
-          PKG_CONFIG_PATH=/tmp/deps/lib/pkgconfig \
           ./configure \
             --prefix=/tmp/ffmpeg-output \
             --enable-static \
@@ -110,7 +99,8 @@ jobs:
             --disable-doc \
             --disable-ffplay \
             --extra-cflags="-I/tmp/deps/include" \
-            --extra-ldflags="-L/tmp/deps/lib -lstdc++ -lnuma"
+            --extra-ldflags="-L/tmp/deps/lib" \
+            --extra-libs="-lstdc++ -lnuma -ldl"
 
       - name: Compile FFmpeg
         run: |

@@ -1,0 +1,80 @@
+name: Build FFmpeg 8.1 Layer
+
+on:
+  workflow_dispatch:  # 手动触发
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:9
+
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y \
+            wget xz-utils build-essential \
+            nasm yasm pkg-config \
+            libx264-dev libx265-dev \
+            libvpx-dev libopus-dev \
+            libmp3lame-dev libfdk-aac-dev \
+            zlib1g-dev libssl-dev
+
+      - name: Download FFmpeg 8.1 source
+        run: |
+          cd /tmp
+          wget https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz
+          tar -xf ffmpeg-8.1.tar.xz
+
+      - name: Configure FFmpeg
+        run: |
+          cd /tmp/ffmpeg-8.1
+          ./configure \
+            --prefix=/tmp/ffmpeg-output \
+            --enable-static \
+            --disable-shared \
+            --enable-gpl \
+            --enable-nonfree \
+            --enable-libx264 \
+            --enable-libx265 \
+            --enable-libvpx \
+            --enable-libopus \
+            --enable-libmp3lame \
+            --enable-libfdk-aac \
+            --enable-openssl \
+            --disable-debug \
+            --disable-doc \
+            --disable-ffplay
+
+      - name: Compile FFmpeg
+        run: |
+          cd /tmp/ffmpeg-8.1
+          make -j$(nproc)
+          make install
+
+      - name: Package layer
+        run: |
+          mkdir -p /tmp/layer/bin
+          cp /tmp/ffmpeg-output/bin/ffmpeg /tmp/layer/bin/
+          cp /tmp/ffmpeg-output/bin/ffprobe /tmp/layer/bin/
+          strip /tmp/layer/bin/ffmpeg /tmp/layer/bin/ffprobe
+
+          cd /tmp/layer
+          tar -czf /tmp/ffmpeg-layer.tar.gz bin/
+
+          # 显示版本信息
+          /tmp/layer/bin/ffmpeg -version
+
+          # 显示文件大小
+          ls -lh /tmp/ffmpeg-layer.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-8.1-layer
+          path: /tmp/ffmpeg-layer.tar.gz
+          retention-days: 30

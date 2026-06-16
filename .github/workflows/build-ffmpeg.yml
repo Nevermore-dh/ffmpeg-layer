@@ -70,7 +70,7 @@ jobs:
           make install
           # 手动生成 x265.pc（旧版 cmake 不自动生成）
           mkdir -p /tmp/deps/lib/pkgconfig
-          printf 'prefix=/tmp/deps\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: x265\nDescription: H.265/HEVC video encoder\nVersion: 3.5\nLibs: -L${libdir} -lx265\nLibs.private: -lstdc++ -lm -lnuma -ldl\nCflags: -I${includedir}\n' > /tmp/deps/lib/pkgconfig/x265.pc
+          printf 'prefix=/tmp/deps\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: x265\nDescription: H.265/HEVC video encoder\nVersion: 3.5\nLibs: -L${libdir} -lx265 -lstdc++ -lm -lnuma -ldl\nCflags: -I${includedir}\n' > /tmp/deps/lib/pkgconfig/x265.pc
 
       - name: Download FFmpeg 8.1 source
         run: |

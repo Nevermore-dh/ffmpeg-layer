@@ -26,10 +26,21 @@ jobs:
           apt-get update
           apt-get install -y \
             wget xz-utils build-essential git cmake \
-            nasm yasm pkg-config \
+            yasm pkg-config \
             libvpx-dev libopus-dev \
             libmp3lame-dev libfdk-aac-dev \
             zlib1g-dev libssl-dev
+
+      - name: Build nasm from source
+        run: |
+          cd /tmp
+          wget https://www.nasm.us/pub/nasm/releasebuilds/2.16.01/nasm-2.16.01.tar.xz
+          tar -xf nasm-2.16.01.tar.xz
+          cd nasm-2.16.01
+          ./configure --prefix=/usr/local
+          make -j$(nproc)
+          make install
+          nasm --version
 
       - name: Build x264 from source
         run: |
@@ -39,7 +50,6 @@ jobs:
           ./configure \
             --prefix=/tmp/deps \
             --enable-static \
-            --disable-shared \
             --disable-opencl
           make -j$(nproc)
           make install

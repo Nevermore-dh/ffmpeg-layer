@@ -114,7 +114,7 @@ jobs:
             --disable-ffplay \
             --extra-cflags="-I/tmp/deps/include" \
             --extra-ldflags="-L/tmp/deps/lib" \
-            --extra-libs="-lstdc++ -lnuma -ldl" || {
+            --extra-libs="-lstdc++ -lpthread -lnuma -ldl" || {
               echo "=== openssl pkg-config ==="
               PKG_CONFIG_PATH=/tmp/deps/lib/pkgconfig pkg-config --libs --cflags openssl || true
               echo "=== config.log openssl 相关内容 ==="

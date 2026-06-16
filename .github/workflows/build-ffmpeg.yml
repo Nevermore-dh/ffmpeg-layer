@@ -114,13 +114,7 @@ jobs:
             --disable-ffplay \
             --extra-cflags="-I/tmp/deps/include" \
             --extra-ldflags="-L/tmp/deps/lib" \
-            --extra-libs="-lstdc++ -lpthread -lnuma -ldl" || {
-              echo "=== openssl pkg-config ==="
-              PKG_CONFIG_PATH=/tmp/deps/lib/pkgconfig pkg-config --libs --cflags openssl || true
-              echo "=== config.log openssl 相关内容 ==="
-              grep -A 30 "check_pkg_config openssl\|check_lib openssl\|DTLS_get_data_mtu" /tmp/ffmpeg-8.1/ffbuild/config.log | tail -80
-              exit 1
-            }
+            --extra-libs="-lstdc++ -lpthread -lnuma -ldl"
 
       - name: Compile FFmpeg
         run: |
@@ -145,7 +139,7 @@ jobs:
           ls -lh /tmp/ffmpeg-layer.tar.gz
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: ffmpeg-8.1-layer
           path: /tmp/ffmpeg-layer.tar.gz
